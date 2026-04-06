@@ -1,0 +1,20 @@
+# Bronzeville Community Asset Map — Python dependencies
+# Install with: pip install -r requirements.txt
+
+# HTTP requests (SODA API, Overpass API, geocoders)
+requests>=2.31.0
+
+# Data wrangling
+pandas>=2.0.0
+
+# Excel read/write
+openpyxl>=3.1.0
+
+# Folium interactive maps (Python-side)
+folium>=0.15.0
+
+# MarkerCluster plugin for Folium
+folium[markercluster]>=0.15.0
+
+# Point-in-polygon filtering against community area boundaries
+shapely>=2.0.0

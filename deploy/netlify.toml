@@ -1,0 +1,13 @@
+[build]
+  ignore = "exit 0"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "/data.js"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+    Content-Type = "application/javascript"

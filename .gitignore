@@ -1,0 +1,28 @@
+# Cache
+_cache/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environment
+.env
+.venv
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Build artifacts (optional - can commit these for gh-pages)
+# bronzeville_assets.xlsx
+# bronzeville_map.html
+# data.js
