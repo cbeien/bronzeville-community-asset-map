@@ -392,6 +392,9 @@ def export_data_js(assets: dict[str, pd.DataFrame],
                     geom = json.loads(geom)
                 except json.JSONDecodeError:
                     continue
+            # Handle json_normalize flattening the_geom into separate columns
+            if geom is None and "the_geom.type" in row.index:
+                geom = {"type": row["the_geom.type"], "coordinates": row["the_geom.coordinates"]}
             if not isinstance(geom, dict):
                 continue
             name = str(row.get("street", row.get("street_nam", row.get("name", "Bike Route"))))
