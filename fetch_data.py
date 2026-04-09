@@ -370,6 +370,94 @@ def fetch_metra_lines() -> pd.DataFrame:
         return pd.DataFrame()
 
 
+# ─── Bicycle Infrastructure ──────────────────────────────────────────────────
+
+def fetch_bike_routes() -> pd.DataFrame:
+    """
+    Fetch bike route/lane line geometries within the Bronzeville area.
+
+    Dataset: hvv9-38ut — "Bike Routes"
+    Returns all routes system-wide; spatial clipping happens on the map.
+    """
+    try:
+        bb = BRONZEVILLE_BBOX
+        where = (
+            f"within_box(the_geom, "
+            f"{bb['lat_max']}, {bb['lon_min']}, "
+            f"{bb['lat_min']}, {bb['lon_max']})"
+        )
+        rows = _soda_get(DATASET_IDS["bike_routes"], {"$where": where})
+        if not rows:
+            # Fall back to fetching all and filtering later
+            rows = _soda_get(DATASET_IDS["bike_routes"], {})
+        if not rows:
+            raise ValueError("Empty response.")
+        df = pd.json_normalize(rows)
+        logger.info(f"Bike routes: {len(df)} features")
+        return df
+    except Exception as exc:
+        logger.warning(f"Could not fetch bike routes: {exc}")
+        return pd.DataFrame()
+
+
+def fetch_divvy_stations() -> pd.DataFrame:
+    """
+    Fetch Divvy bicycle-share stations within the Bronzeville bounding box.
+
+    Dataset: bbyy-e7gq — "Divvy Bicycle Stations"
+    """
+    try:
+        bb = BRONZEVILLE_BBOX
+        where = (
+            f"latitude >= {bb['lat_min']} AND latitude <= {bb['lat_max']} "
+            f"AND longitude >= {bb['lon_min']} AND longitude <= {bb['lon_max']}"
+        )
+        rows = _soda_get(DATASET_IDS["divvy_stations"], {"$where": where})
+        if not rows:
+            raise ValueError("Empty response.")
+        df = pd.json_normalize(rows)
+        df = _normalise_coords(df)
+        logger.info(f"Divvy stations: {len(df)} in bbox")
+        return df
+    except Exception as exc:
+        logger.warning(f"Could not fetch Divvy stations: {exc}")
+        return pd.DataFrame()
+
+
+def fetch_bike_racks() -> pd.DataFrame:
+    """
+    Fetch bike rack locations within the Bronzeville bounding box
+    from OpenStreetMap via Overpass API.
+
+    The Chicago SODA dataset (4ywc-hr3a) is an empty map view,
+    so we use OSM instead.
+    """
+    bb = BRONZEVILLE_BBOX
+    bbox = f"{bb['lat_min']},{bb['lon_min']},{bb['lat_max']},{bb['lon_max']}"
+    query = f'[out:json][timeout:30];node["amenity"="bicycle_parking"]({bbox});out body;'
+    elements = _overpass_get(query)
+    if not elements:
+        logger.warning("OSM bike racks: no results returned")
+        return pd.DataFrame()
+    records = []
+    for el in elements:
+        tags = el.get("tags", {})
+        lat, lon = el.get("lat"), el.get("lon")
+        if lat is None or lon is None:
+            continue
+        records.append({
+            "name":      tags.get("name", "Bike Rack"),
+            "label":     "Bike Rack",
+            "racktype":  tags.get("bicycle_parking", "rack"),
+            "capacity":  tags.get("capacity", "N/A"),
+            "latitude":  float(lat),
+            "longitude": float(lon),
+        })
+    df = pd.DataFrame(records)
+    logger.info(f"OSM bike racks: {len(df)} in Bronzeville bbox")
+    return df
+
+
 # ─── Community Area Boundaries ────────────────────────────────────────────────
 
 def fetch_community_boundaries(area_names: tuple[str, ...]) -> list[dict]:
@@ -432,6 +520,9 @@ def fetch_all_transportation() -> dict[str, pd.DataFrame]:
         ("cta_bus_routes",    fetch_cta_bus_routes),
         ("metra_stations",    fetch_osm_metra_stations), # OSM — SODA requires auth
         ("metra_lines",       fetch_metra_lines),
+        ("bike_routes",       fetch_bike_routes),
+        ("divvy_stations",    fetch_divvy_stations),
+        ("bike_racks",        fetch_bike_racks),
     ]
 
     result = {}

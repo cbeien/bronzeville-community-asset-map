@@ -66,6 +66,9 @@ _SHEET_COLORS = {
     "CTA Bus Routes":        "7D3C98",
     "Metra Stations":        "1A5276",
     "Metra Lines":           "1A5276",
+    "Bike Routes":           "00897B",
+    "Divvy Stations":        "1565C0",
+    "Bike Racks":            "4DD0E1",
 }
 
 
@@ -196,6 +199,9 @@ def export_excel(assets: dict[str, pd.DataFrame],
         "cta_bus_routes":    "CTA Bus Routes",
         "metra_stations":    "Metra Stations",
         "metra_lines":       "Metra Lines",
+        "bike_routes":       "Bike Routes",
+        "divvy_stations":    "Divvy Stations",
+        "bike_racks":        "Bike Racks",
     }
 
     for key, sheet_name in transport_sheet_map.items():
@@ -371,6 +377,30 @@ def export_data_js(assets: dict[str, pd.DataFrame],
     lines.append(f"    cta_rail: {_transport_stops_to_js(transport.get('cta_rail_stations', pd.DataFrame()), 'CTA Rail Station')},")
     lines.append(f"    cta_bus:  {_transport_stops_to_js(transport.get('cta_bus_stops', pd.DataFrame()), 'CTA Bus Stop')},")
     lines.append(f"    metra:    {_transport_stops_to_js(transport.get('metra_stations', pd.DataFrame()), 'Metra Station')},")
+    lines.append(f"    divvy:    {_transport_stops_to_js(transport.get('divvy_stations', pd.DataFrame()), 'Divvy Station')},")
+    lines.append(f"    bike_rack: {_transport_stops_to_js(transport.get('bike_racks', pd.DataFrame()), 'Bike Rack')},")
+
+    # Bike routes — line geometries serialised as GeoJSON features
+    bike_routes_df = transport.get('bike_routes', pd.DataFrame())
+    if not bike_routes_df.empty:
+        import json as _json2
+        bike_features = []
+        for _, row in bike_routes_df.iterrows():
+            geom = row.get("the_geom", row.get("geometry"))
+            if isinstance(geom, str):
+                try:
+                    geom = json.loads(geom)
+                except json.JSONDecodeError:
+                    continue
+            if not isinstance(geom, dict):
+                continue
+            name = str(row.get("street", row.get("street_nam", row.get("name", "Bike Route"))))
+            route_type = str(row.get("type", row.get("bikeroute", "")))
+            bike_features.append({"name": name, "type": route_type, "geometry": geom})
+        lines.append(f"    bike_routes: {json.dumps(bike_features, separators=(',', ':'))},")
+    else:
+        lines.append("    bike_routes: [],")
+
     lines.append("  },")
 
     # Zones and community boundary
@@ -407,6 +437,9 @@ def _build_filter_html() -> str:
         ("cta_rail",   "cta_rail",   "CTA Rail Stations"),
         ("cta_bus",    "cta_bus",    "CTA Bus Stops"),
         ("metra",      "metra",      "Metra Stations"),
+        ("bike_route", "bike_route", "Bike Lanes"),
+        ("divvy",      "divvy",      "Divvy Stations"),
+        ("bike_rack",  "bike_rack",  "Bike Racks"),
     ]
 
     # Display mode selector — rendered above the category checkboxes
@@ -492,7 +525,7 @@ def _build_legend_html() -> str:
             f' {s["label"]}'
             f'</div>'
         )
-    for cat in ("cta_rail", "cta_bus", "metra"):
+    for cat in ("cta_rail", "cta_bus", "metra", "bike_route", "divvy", "bike_rack"):
         s = MARKER_STYLES[cat]
         items.append(
             f'<div class="legend-item">'
@@ -790,6 +823,9 @@ const COLOURS = {
   cta_rail:   '#455A64',
   cta_bus:    '#455A64',
   metra:      '#455A64',
+  bike_route: '#00897B',
+  divvy:      '#1565C0',
+  bike_rack:  '#4DD0E1',
 };
 
 // SimCity asset colours — used when SimCity zoning mode is active
@@ -804,6 +840,9 @@ const SIMCITY_COLOURS = {
   cta_rail:   '#455A64',   // Transit slate
   cta_bus:    '#455A64',   // Transit slate
   metra:      '#455A64',   // Transit slate
+  bike_route: '#00897B',   // Teal
+  divvy:      '#1565C0',   // Blue
+  bike_rack:  '#4DD0E1',   // Cyan
 };
 
 // Active colour map — switched by SimCity toggle
@@ -946,6 +985,9 @@ const ICONS = {
   cta_rail:   'fa-train',
   cta_bus:    'fa-bus',
   metra:      'fa-train',
+  bike_route: 'fa-bicycle',
+  divvy:      'fa-bicycle',
+  bike_rack:  'fa-lock',
 };
 
 function makeIcon(category) {
@@ -1126,6 +1168,48 @@ function buildTransportLayers() {
     layerGroups[key] = group;
     group.addTo(map);
   });
+
+  // Bike lanes — polyline geometries
+  const bikeRouteGroup = L.layerGroup();
+  (tData['bike_routes'] || []).forEach(d => {
+    if (!d.geometry) return;
+    try {
+      L.geoJSON(d.geometry, {
+        style: { color: COLOURS['bike_route'] || '#00897B', weight: 3, opacity: 0.8, dashArray: '8 4' },
+      }).bindTooltip(d.name + (d.type ? ' (' + d.type + ')' : ''))
+        .addTo(bikeRouteGroup);
+    } catch(e) {}
+  });
+  layerGroups['bike_route'] = bikeRouteGroup;
+  bikeRouteGroup.addTo(map);
+
+  // Divvy stations — blue circle markers
+  const divvyGroup = L.layerGroup();
+  (tData['divvy'] || []).forEach(d => {
+    if (!d.lat || !d.lon) return;
+    L.circleMarker([d.lat, d.lon], {
+      radius: 6, color: COLOURS['divvy'] || '#1565C0', fillColor: COLOURS['divvy'] || '#1565C0',
+      fillOpacity: 0.85, weight: 1.5,
+    })
+    .bindPopup(`<b>${d.name}</b><br><i>Divvy Station</i>`)
+    .addTo(divvyGroup);
+  });
+  layerGroups['divvy'] = divvyGroup;
+  divvyGroup.addTo(map);
+
+  // Bike racks — small cyan dots (hidden by default)
+  const bikeRackGroup = L.layerGroup();
+  (tData['bike_rack'] || []).forEach(d => {
+    if (!d.lat || !d.lon) return;
+    L.circleMarker([d.lat, d.lon], {
+      radius: 3, color: COLOURS['bike_rack'] || '#4DD0E1', fillColor: COLOURS['bike_rack'] || '#4DD0E1',
+      fillOpacity: 0.7, weight: 1,
+    })
+    .bindPopup(`<b>${d.name}</b><br><i>Bike Rack</i>`)
+    .addTo(bikeRackGroup);
+  });
+  layerGroups['bike_rack'] = bikeRackGroup;
+  // Bike racks hidden by default — too many dots
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1329,7 +1413,7 @@ function updateCounts() {
 
   const allCats = [
     ...Object.keys(BRONZEVILLE_DATA.assets),
-    'cta_rail', 'cta_bus', 'metra',
+    'cta_rail', 'cta_bus', 'metra', 'bike_route', 'divvy', 'bike_rack',
   ];
 
   allCats.forEach(cat => {

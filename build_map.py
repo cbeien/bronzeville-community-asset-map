@@ -331,6 +331,103 @@ def add_metra_stations(m: folium.Map, df: pd.DataFrame) -> folium.Map:
     return m
 
 
+# ─── Bicycle Infrastructure Layers ───────────────────────────────────────────
+
+def add_bike_routes(m: folium.Map, df: pd.DataFrame) -> folium.Map:
+    """Draw bike route/lane line geometries as green polylines."""
+    if df.empty:
+        return m
+
+    style = MARKER_STYLES["bike_route"]
+    layer = folium.FeatureGroup(name="Bike Lanes", show=True)
+
+    for _, row in df.iterrows():
+        geom = _parse_geom(row.get("the_geom", row.get("geometry")))
+        segments = _geom_to_segments(geom)
+        if not segments:
+            continue
+
+        route_name = row.get("street", row.get("street_nam", row.get("name", "Bike Route")))
+        route_type = row.get("type", row.get("bikeroute", ""))
+        tooltip = f"{route_name} ({route_type})" if route_type else str(route_name)
+
+        for seg in segments:
+            folium.PolyLine(
+                locations=seg,
+                color=style["hex"], weight=4,
+                opacity=0.8, dash_array="8 4",
+                tooltip=tooltip,
+            ).add_to(layer)
+
+    layer.add_to(m)
+    return m
+
+
+def add_divvy_stations(m: folium.Map, df: pd.DataFrame) -> folium.Map:
+    """Plot Divvy bicycle-share station markers."""
+    if df.empty:
+        return m
+
+    style = MARKER_STYLES["divvy"]
+    layer = folium.FeatureGroup(name="Divvy Stations", show=True)
+
+    for _, row in df.iterrows():
+        lat, lon = _f(row.get("latitude")), _f(row.get("longitude"))
+        if lat is None or lon is None:
+            continue
+
+        name = row.get("station_name", row.get("name", "Divvy Station"))
+        capacity = row.get("total_docks", row.get("docks_in_service", "N/A"))
+
+        popup_html = (
+            f"<b>{name}</b><br>"
+            f"<i>Divvy Station</i><br>"
+            f"Docks: {capacity}"
+        )
+        folium.Marker(
+            location=[lat, lon],
+            tooltip=name,
+            popup=folium.Popup(popup_html, max_width=240),
+            icon=folium.Icon(color=style["color"], icon=style["icon"], prefix="fa"),
+        ).add_to(layer)
+
+    layer.add_to(m)
+    return m
+
+
+def add_bike_racks(m: folium.Map, df: pd.DataFrame) -> folium.Map:
+    """Plot bike rack locations as small circle markers, clustered."""
+    if df.empty:
+        return m
+
+    style = MARKER_STYLES["bike_rack"]
+    layer = folium.FeatureGroup(name="Bike Racks", show=False)
+    cluster = MarkerCluster().add_to(layer)
+
+    for _, row in df.iterrows():
+        lat, lon = _f(row.get("latitude")), _f(row.get("longitude"))
+        if lat is None or lon is None:
+            continue
+
+        rack_type = row.get("racktype", row.get("rack_type", "Bike Rack"))
+        address = row.get("address", row.get("location_description", ""))
+        tooltip = f"Bike Rack — {address}" if address else "Bike Rack"
+
+        folium.CircleMarker(
+            location=[lat, lon], radius=4,
+            color=style["hex"],
+            fill=True, fill_opacity=0.7,
+            tooltip=tooltip,
+            popup=folium.Popup(
+                f"<b>Bike Rack</b><br>{address}<br>Type: {rack_type}",
+                max_width=200,
+            ),
+        ).add_to(cluster)
+
+    layer.add_to(m)
+    return m
+
+
 # ─── Asset Marker Layers ──────────────────────────────────────────────────────
 
 def _popup_html(name: str, address: str, asset_type: str,
@@ -421,6 +518,11 @@ def build_full_map(transport: dict[str, pd.DataFrame],
     m = add_cta_bus_stops(m,     transport.get("cta_bus_stops",     pd.DataFrame()))
     m = add_metra_lines(m,       transport.get("metra_lines",       pd.DataFrame()))
     m = add_metra_stations(m,    transport.get("metra_stations",    pd.DataFrame()))
+
+    # Bicycle infrastructure
+    m = add_bike_routes(m,       transport.get("bike_routes",       pd.DataFrame()))
+    m = add_divvy_stations(m,    transport.get("divvy_stations",    pd.DataFrame()))
+    m = add_bike_racks(m,        transport.get("bike_racks",        pd.DataFrame()))
 
     # Asset categories — each is a separately toggleable layer
     asset_layer_map = {

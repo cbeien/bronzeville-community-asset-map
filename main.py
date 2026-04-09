@@ -185,7 +185,7 @@ def main() -> None:
 
     # Also clip transport point layers (bus stops, rail stations, metra stops)
     # Leave line layers (rail lines, bus routes) unclipped so they render fully.
-    POINT_TRANSPORT_KEYS = {"cta_rail_stations", "cta_bus_stops", "metra_stations"}
+    POINT_TRANSPORT_KEYS = {"cta_rail_stations", "cta_bus_stops", "metra_stations", "divvy_stations", "bike_racks"}
     transport_points = {k: v for k, v in transport.items() if k in POINT_TRANSPORT_KEYS}
     transport_lines  = {k: v for k, v in transport.items() if k not in POINT_TRANSPORT_KEYS}
     transport_points = _clip_to_boundary(transport_points, community_features)

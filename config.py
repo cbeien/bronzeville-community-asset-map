@@ -87,6 +87,11 @@ DATASET_IDS = {
     "metra_stations":    "nqm8-q2ym",  # Metra Stations
     "metra_lines":       "q8wx-dznq",  # Metra Lines
 
+    # Bicycle Infrastructure
+    "bike_routes":       "hvv9-38ut",  # Bike Routes (line geometries)
+    "divvy_stations":    "bbyy-e7gq",  # Divvy Bicycle Stations
+    "bike_racks":        "4ywc-hr3a",  # Bike Racks (point locations)
+
     # Community Assets — Chicago Data Portal
     "landmarks":         "tdab-kixi",  # Chicago Landmarks (has latitude/longitude columns)
     "business_licenses": "uupf-x98q",  # Active Business Licenses (Current)
@@ -144,6 +149,11 @@ MARKER_STYLES = {
     "cta_rail":    {"color": "gray",      "icon": "train",           "hex": "#455A64", "label": "CTA Rail Stations"},
     "cta_bus":     {"color": "gray",      "icon": "bus",             "hex": "#455A64", "label": "CTA Bus Stops"},
     "metra":       {"color": "gray",      "icon": "train",           "hex": "#455A64", "label": "Metra Stations"},
+
+    # Bicycle infrastructure layers
+    "bike_route":  {"color": "cadetblue", "icon": "bicycle",         "hex": "#00897B", "label": "Bike Lanes"},
+    "divvy":       {"color": "blue",      "icon": "bicycle",         "hex": "#1565C0", "label": "Divvy Stations"},
+    "bike_rack":   {"color": "lightblue", "icon": "lock",            "hex": "#4DD0E1", "label": "Bike Racks"},
 }
 
 # Ordered list of all asset categories (used for filter panel and exports)
