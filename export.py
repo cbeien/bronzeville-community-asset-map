@@ -467,11 +467,11 @@ def _build_filter_html() -> str:
             f'<span class="dot" style="background:{hex_c}"></span> {label}'
             f'</label>'
         )
-    # Vacant lots / storefronts / abandoned structures — moved from Map Overlays
+    # Vacant lots / storefronts / registered vacant buildings
     html += (
         '<label class="filter-label">'
         '<input type="checkbox" class="layer-toggle" data-layer="vacant" checked> '
-        '<span class="dot" style="background:#795548"></span> Vacant Lots &amp; Buildings'
+        '<span class="dot" style="background:#795548"></span> Vacant Lots &amp; Buildings (incl. City Registry)'
         '</label>'
     )
 
@@ -534,6 +534,19 @@ def _build_legend_html() -> str:
             f'<div class="legend-item">'
             f'<span class="legend-dot" style="background:{s["hex"]}"></span>'
             f' {s["label"]}'
+            f'</div>'
+        )
+    # Vacant property sub-types
+    vacant_legend = [
+        ("#D4956A", "Vacant Land (Cook County)"),
+        ("#E67E22", "Vacant Storefront (Verified)"),
+        ("#5D4037", "Vacant Building (City Registry)"),
+    ]
+    for hex_c, label in vacant_legend:
+        items.append(
+            f'<div class="legend-item">'
+            f'<span class="legend-dot" style="background:{hex_c}"></span>'
+            f' {label}'
             f'</div>'
         )
     return "\n".join(items)
@@ -1268,9 +1281,10 @@ if (simCityToggle) {
 }
 
 // ── Vacant / Abandoned layer ────────────────────────────────
-// Three sub-types with distinct colours:
+// Four sub-types with distinct colours:
 //   vacant_land        → sandy brown  #D4956A  (bare lots, no structure)
 //   vacant_storefront  → orange       #E67E22  (empty commercial buildings)
+//   vacant_registered  → dark brown   #5D4037  (City of Chicago Vacant Building Registry)
 //   abandoned_structure→ brick red    #C0392B  (311-reported derelict buildings)
 
 function buildVacantLayer() {
@@ -1280,6 +1294,7 @@ function buildVacantLayer() {
   const STYLES = {
     vacant_land:       { radius: 4, color: '#A0522D', fillColor: '#D4956A' },
     vacant_storefront: { radius: 5, color: '#C0640A', fillColor: '#E67E22' },
+    vacant_registered: { radius: 5, color: '#3E2723', fillColor: '#5D4037' },
   };
   const DEFAULT_STYLE = { radius: 4, color: '#795548', fillColor: '#A1887F' };
 
@@ -1295,11 +1310,15 @@ function buildVacantLayer() {
       fillOpacity: 0.85,
       weight:      1,
     });
+    const ward     = lot.ward       || '';
+    const category = lot.category   || '';
     dot.bindPopup(
       '<div style="min-width:160px">'
       + '<b style="font-size:13px">' + address + '</b><hr style="margin:4px 0">'
       + '<b>' + typeLabel + '</b>'
       + (classCode ? '<br><small style="color:#888">Cook County Class ' + classCode + '</small>' : '')
+      + (ward ? '<br><small style="color:#888">Ward ' + ward + '</small>' : '')
+      + (category ? '<br><small style="color:#888">' + category + '</small>' : '')
       + '</div>'
     );
     dot.addTo(group);

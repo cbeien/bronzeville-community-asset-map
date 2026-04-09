@@ -154,6 +154,9 @@ MARKER_STYLES = {
     "bike_route":  {"color": "cadetblue", "icon": "bicycle",         "hex": "#00897B", "label": "Bike Lanes"},
     "divvy":       {"color": "blue",      "icon": "bicycle",         "hex": "#1565C0", "label": "Divvy Stations"},
     "bike_rack":   {"color": "lightblue", "icon": "lock",            "hex": "#4DD0E1", "label": "Bike Racks"},
+
+    # Vacant property layers
+    "vacant_registered": {"color": "brown", "icon": "ban", "hex": "#5D4037", "label": "Vacant (City Registry)"},
 }
 
 # Ordered list of all asset categories (used for filter panel and exports)
@@ -163,6 +166,8 @@ ASSET_CATEGORIES = [
 ]
 
 # ─── Output Paths ─────────────────────────────────────────────────────────────
+VACANT_PDF_PATH   = "data/vacant_building_registry.pdf"  # City of Chicago Vacant Building Registry PDF
+
 OUTPUT_MAP_HTML   = "bronzeville_map.html"      # Folium interactive map
 OUTPUT_EXCEL      = "bronzeville_assets.xlsx"   # Multi-sheet workbook
 OUTPUT_SUMMARY    = "bronzeville_summary.html"  # HTML summary tables
