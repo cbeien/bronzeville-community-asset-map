@@ -150,6 +150,10 @@ MARKER_STYLES = {
     "cta_bus":     {"color": "gray",      "icon": "bus",             "hex": "#455A64", "label": "CTA Bus Stops"},
     "metra":       {"color": "gray",      "icon": "train",           "hex": "#455A64", "label": "Metra Stations"},
 
+    # Rail line layers (polylines)
+    "cta_rail_line": {"color": "gray",     "icon": "train",           "hex": "#c60c30", "label": "CTA Rail Lines"},
+    "metra_line":    {"color": "darkblue", "icon": "train",           "hex": "#1A237E", "label": "Metra Lines"},
+
     # Bicycle infrastructure layers
     "bike_route":  {"color": "cadetblue", "icon": "bicycle",         "hex": "#00897B", "label": "Bike Lanes"},
     "divvy":       {"color": "blue",      "icon": "bicycle",         "hex": "#1565C0", "label": "Divvy Stations"},

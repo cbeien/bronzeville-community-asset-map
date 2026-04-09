@@ -356,17 +356,60 @@ def fetch_metra_lines() -> pd.DataFrame:
     """
     Fetch Metra rail line geometries.
 
-    Dataset: q8wx-dznq — verify ID; may be on CMAP/RTA portals instead.
+    Tries SODA dataset q8wx-dznq first; falls back to OSM Overpass for
+    railway=rail + operator~Metra within the Bronzeville bbox.
     """
+    # Try SODA first
     try:
         rows = _soda_get(DATASET_IDS["metra_lines"], {})
         if not rows:
             raise ValueError("Empty response.")
         df = pd.json_normalize(rows)
-        logger.info(f"Metra lines: {len(df)} features")
+        logger.info(f"Metra lines (SODA): {len(df)} features")
+        return df
+    except Exception:
+        logger.info("SODA Metra lines unavailable — falling back to OSM Overpass")
+
+    # OSM Overpass fallback — fetch Metra rail ways in a wider bbox
+    try:
+        bb = BRONZEVILLE_BBOX
+        # Expand bbox slightly so lines extend beyond the visible area
+        bbox = f"{bb['lat_min']-0.02},{bb['lon_min']-0.02},{bb['lat_max']+0.02},{bb['lon_max']+0.02}"
+        query = (
+            f'[out:json][timeout:30];'
+            f'way["railway"="rail"]["operator"~"Metra",i]({bbox});'
+            f'out body;>;out skel qt;'
+        )
+        elements = _overpass_get(query)
+        if not elements:
+            raise ValueError("Empty Overpass response for Metra lines.")
+
+        # Build node lookup for resolving way coordinates
+        nodes = {e["id"]: (e["lon"], e["lat"]) for e in elements if e["type"] == "node"}
+        ways = [e for e in elements if e["type"] == "way"]
+
+        features = []
+        for way in ways:
+            coords = []
+            for nid in way.get("nodes", []):
+                if nid in nodes:
+                    coords.append(list(nodes[nid]))
+            if len(coords) >= 2:
+                name = way.get("tags", {}).get("name", "Metra Line")
+                features.append({
+                    "name": name,
+                    "the_geom.type": "LineString",
+                    "the_geom.coordinates": coords,
+                })
+
+        if not features:
+            raise ValueError("No Metra line ways resolved.")
+
+        df = pd.DataFrame(features)
+        logger.info(f"Metra lines (OSM): {len(df)} way segments")
         return df
     except Exception as exc:
-        logger.warning(f"Could not fetch Metra lines: {exc}")
+        logger.warning(f"Could not fetch Metra lines from OSM: {exc}")
         return pd.DataFrame()
 
 

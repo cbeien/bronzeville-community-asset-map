@@ -380,6 +380,49 @@ def export_data_js(assets: dict[str, pd.DataFrame],
     lines.append(f"    divvy:    {_transport_stops_to_js(transport.get('divvy_stations', pd.DataFrame()), 'Divvy Station')},")
     lines.append(f"    bike_rack: {_transport_stops_to_js(transport.get('bike_racks', pd.DataFrame()), 'Bike Rack')},")
 
+    # CTA rail lines — polyline geometries with line colour info
+    cta_lines_df = transport.get('cta_rail_lines', pd.DataFrame())
+    if not cta_lines_df.empty:
+        cta_line_features = []
+        for _, row in cta_lines_df.iterrows():
+            geom = row.get("the_geom", row.get("geometry"))
+            if isinstance(geom, str):
+                try:
+                    geom = json.loads(geom)
+                except json.JSONDecodeError:
+                    continue
+            if geom is None and "the_geom.type" in row.index:
+                geom = {"type": row["the_geom.type"], "coordinates": row["the_geom.coordinates"]}
+            if not isinstance(geom, dict):
+                continue
+            line_names = str(row.get("lines", row.get("name", "CTA Line")))
+            desc = str(row.get("description", ""))
+            cta_line_features.append({"lines": line_names, "description": desc, "geometry": geom})
+        lines.append(f"    cta_rail_lines: {json.dumps(cta_line_features, separators=(',', ':'))},")
+    else:
+        lines.append("    cta_rail_lines: [],")
+
+    # Metra lines — polyline geometries
+    metra_lines_df = transport.get('metra_lines', pd.DataFrame())
+    if not metra_lines_df.empty:
+        metra_line_features = []
+        for _, row in metra_lines_df.iterrows():
+            geom = row.get("the_geom", row.get("geometry"))
+            if isinstance(geom, str):
+                try:
+                    geom = json.loads(geom)
+                except json.JSONDecodeError:
+                    continue
+            if geom is None and "the_geom.type" in row.index:
+                geom = {"type": row["the_geom.type"], "coordinates": row["the_geom.coordinates"]}
+            if not isinstance(geom, dict):
+                continue
+            name = str(row.get("name", row.get("lines", "Metra Line")))
+            metra_line_features.append({"name": name, "geometry": geom})
+        lines.append(f"    metra_lines: {json.dumps(metra_line_features, separators=(',', ':'))},")
+    else:
+        lines.append("    metra_lines: [],")
+
     # Bike routes — line geometries serialised as GeoJSON features
     bike_routes_df = transport.get('bike_routes', pd.DataFrame())
     if not bike_routes_df.empty:
@@ -437,11 +480,13 @@ def export_data_js(assets: dict[str, pd.DataFrame],
 def _build_filter_html() -> str:
     """Generate the display-mode selector and filter-panel checkboxes."""
     transport_layers = [
-        ("cta_rail",   "cta_rail",   "CTA Rail Stations"),
-        ("cta_bus",    "cta_bus",    "CTA Bus Stops"),
-        ("metra",      "metra",      "Metra Stations"),
-        ("bike_route", "bike_route", "Bike Lanes"),
-        ("divvy",      "divvy",      "Divvy Stations"),
+        ("cta_rail",      "cta_rail",      "CTA Rail Stations"),
+        ("cta_rail_line", "cta_rail",      "CTA Rail Lines"),
+        ("cta_bus",       "cta_bus",       "CTA Bus Stops"),
+        ("metra",         "metra",         "Metra Stations"),
+        ("metra_line",    "metra",         "Metra Lines"),
+        ("bike_route",    "bike_route",    "Bike Lanes"),
+        ("divvy",         "divvy",         "Divvy Stations"),
         ("bike_rack",  "bike_rack",  "Bike Racks"),
     ]
 
@@ -528,7 +573,7 @@ def _build_legend_html() -> str:
             f' {s["label"]}'
             f'</div>'
         )
-    for cat in ("cta_rail", "cta_bus", "metra", "bike_route", "divvy", "bike_rack"):
+    for cat in ("cta_rail", "cta_bus", "metra", "bike_route", "divvy", "bike_rack", "cta_rail_line", "metra_line"):
         s = MARKER_STYLES[cat]
         items.append(
             f'<div class="legend-item">'
@@ -839,6 +884,8 @@ const COLOURS = {
   cta_rail:   '#455A64',
   cta_bus:    '#455A64',
   metra:      '#455A64',
+  cta_rail_line: '#c60c30',
+  metra_line: '#1A237E',
   bike_route: '#00897B',
   divvy:      '#1565C0',
   bike_rack:  '#4DD0E1',
@@ -856,6 +903,8 @@ const SIMCITY_COLOURS = {
   cta_rail:   '#455A64',   // Transit slate
   cta_bus:    '#455A64',   // Transit slate
   metra:      '#455A64',   // Transit slate
+  cta_rail_line: '#c60c30', // CTA Red
+  metra_line: '#1A237E',   // Navy
   bike_route: '#00897B',   // Teal
   divvy:      '#1565C0',   // Blue
   bike_rack:  '#4DD0E1',   // Cyan
@@ -1001,6 +1050,8 @@ const ICONS = {
   cta_rail:   'fa-train',
   cta_bus:    'fa-bus',
   metra:      'fa-train',
+  cta_rail_line: 'fa-train',
+  metra_line: 'fa-train',
   bike_route: 'fa-bicycle',
   divvy:      'fa-bicycle',
   bike_rack:  'fa-lock',
@@ -1185,7 +1236,48 @@ function buildTransportLayers() {
     group.addTo(map);
   });
 
-  // Bike lanes — polyline geometries
+  // CTA rail lines — coloured polylines by line name
+  const CTA_LINE_COLORS = {
+    'red': '#c60c30', 'blue': '#00a1de', 'green': '#009b3a',
+    'brown': '#62361b', 'purple': '#522398', 'yellow': '#f9e300',
+    'pink': '#e27ea6', 'orange': '#f9461c',
+  };
+  function ctaLineColor(lineStr) {
+    const s = (lineStr || '').toLowerCase();
+    for (const [name, color] of Object.entries(CTA_LINE_COLORS)) {
+      if (s.includes(name)) return color;
+    }
+    return '#455A64';
+  }
+  const ctaLineGroup = L.layerGroup();
+  (tData['cta_rail_lines'] || []).forEach(d => {
+    if (!d.geometry) return;
+    try {
+      const color = ctaLineColor(d.lines);
+      L.geoJSON(d.geometry, {
+        style: { color: color, weight: 4, opacity: 0.85 },
+      }).bindTooltip(d.lines + (d.description ? '<br>' + d.description : ''))
+        .addTo(ctaLineGroup);
+    } catch(e) {}
+  });
+  layerGroups['cta_rail_line'] = ctaLineGroup;
+  ctaLineGroup.addTo(map);
+
+  // Metra lines — dark grey polylines
+  const metraLineGroup = L.layerGroup();
+  (tData['metra_lines'] || []).forEach(d => {
+    if (!d.geometry) return;
+    try {
+      L.geoJSON(d.geometry, {
+        style: { color: '#1A237E', weight: 4, opacity: 0.8, dashArray: '10 6' },
+      }).bindTooltip(d.name || 'Metra Line')
+        .addTo(metraLineGroup);
+    } catch(e) {}
+  });
+  layerGroups['metra_line'] = metraLineGroup;
+  metraLineGroup.addTo(map);
+
+  // Bike lanes — coloured polylines
   const bikeRouteGroup = L.layerGroup();
   (tData['bike_routes'] || []).forEach(d => {
     if (!d.geometry) return;
@@ -1435,7 +1527,7 @@ function updateCounts() {
 
   const allCats = [
     ...Object.keys(BRONZEVILLE_DATA.assets),
-    'cta_rail', 'cta_bus', 'metra', 'bike_route', 'divvy', 'bike_rack',
+    'cta_rail', 'cta_rail_line', 'cta_bus', 'metra', 'metra_line', 'bike_route', 'divvy', 'bike_rack',
   ];
 
   allCats.forEach(cat => {
